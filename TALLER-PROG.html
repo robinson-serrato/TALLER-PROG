@@ -1,0 +1,337 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+
+Reservas = []
+
+nombre_guardado = ""
+reserva_actual = None
+
+cancelando_reserva = False
+
+def Inicio():
+    global V1
+    V1 = tk.Tk()
+    V1.title("Restaurante Mediterráneo")
+
+    imagen = tk.PhotoImage(file="LogoRes.png")
+    label_img = tk.Label(V1, image=imagen)
+    label_img.image = imagen
+    label_img.pack(pady=20)
+
+    tk.Button(V1, text="Reservar", command=Formulario).pack(pady=10)
+    tk.Button(V1, text="Cancelar Reserva", command=CancelarReservaFormulario).pack(pady=5)
+
+    V1.mainloop()
+
+def Formulario():
+    global F1, nombre, identificacion, fecha, zona, extra, frame_extra, nombre_guardado
+    V1.withdraw()
+    F1 = tk.Toplevel()
+    F1.title("Formulario de Reserva")
+
+    tk.Label(F1, text="Nombre del cliente:").pack()
+    nombre = tk.Entry(F1)
+    nombre.pack()
+    nombre.insert(0, nombre_guardado)
+
+    tk.Label(F1, text="Identificación:").pack()
+    identificacion = tk.Entry(F1)
+    identificacion.pack()
+
+    tk.Label(F1, text="Fecha de reserva (dd/mm/aa):").pack()
+    fecha = tk.Entry(F1)
+    fecha.pack()
+
+    tk.Label(F1, text="Zona del restaurante:").pack()
+    zona = ttk.Combobox(F1, values=["Mesa", "Barra", "Terraza"], state='readonly')
+    zona.pack()
+    zona.bind("<<ComboboxSelected>>", Mostrar_opcion_zona)
+
+    frame_extra = tk.Frame(F1)
+    frame_extra.pack(pady=5)
+
+    tk.Button(F1, text="Continuar", command=Resumen).pack(pady=10)
+
+def Mostrar_opcion_zona(event=None):
+    for widget in frame_extra.winfo_children():
+        widget.destroy()
+
+    global extra
+    seleccion = zona.get()
+    if seleccion == "Barra":
+        tk.Label(frame_extra, text="Número de asientos (1-3):").pack()
+        extra = tk.Entry(frame_extra)
+        extra.pack()
+    elif seleccion == "Terraza":
+        tk.Label(frame_extra, text="Número de mesa (1-3):").pack()
+        extra = tk.Entry(frame_extra)
+        extra.pack()
+    elif seleccion == "Mesa":
+        tk.Label(frame_extra, text="Número de mesa (1-4):").pack()
+        extra = tk.Entry(frame_extra)
+        extra.pack()
+
+def Resumen():
+    global R1, nombre_guardado, reserva_actual
+    n = nombre.get()
+    i = identificacion.get()
+    f = fecha.get()
+    z = zona.get()
+    d = extra.get()
+
+    if not n or not i or not f or not z or not d:
+        messagebox.showerror("Error", "Debe llenar todos los campos.")
+        return
+
+    if z == "Barra":
+        if not d.isdigit() or int(d) < 1 or int(d) > 3:
+            messagebox.showerror("Error", "Asientos válidos: 1 a 3")
+            return
+    elif z == "Terraza":
+        if not d.isdigit() or int(d) not in [1, 2, 3]:
+            messagebox.showerror("Error", "Mesas válidas: 1, 2, 3")
+            return
+    elif z == "Mesa":
+        if not d.isdigit() or int(d) not in [1, 2, 3, 4]:
+            messagebox.showerror("Error", "Mesas válidas: 1, 2, 3, 4")
+            return
+
+    nombre_guardado = n
+
+    nueva_reserva = {
+        "Nombre": n,
+        "ID": i,
+        "Fecha": f,
+        "Zona": z,
+        "Detalle": d
+    }
+
+    if reserva_actual is not None:
+        Reservas[reserva_actual] = nueva_reserva
+        reserva_actual = None
+    else:
+        Reservas.append(nueva_reserva)
+
+    F1.withdraw()
+    MostrarResumenReservas()
+
+def MostrarResumenReservas():
+    global R1
+
+    if not Reservas:
+        messagebox.showinfo("Sin reservas", "No hay reservas registradas actualmente.")
+        if 'F1' in globals() and F1.winfo_exists():
+            F1.destroy()
+        V1.deiconify()
+        return
+
+    R1 = tk.Toplevel()
+    R1.title("Resumen de Reservas")
+
+    resumen_texto = "\n\n".join([
+        f"Reserva {idx+1}:\nNombre: {r['Nombre']}\nID: {r['ID']}\nFecha: {r['Fecha']}\nZona: {r['Zona']}\nDetalle: {r['Detalle']}"
+        for idx, r in enumerate(Reservas)
+    ])
+
+    tk.Label(R1, text="Resumen de sus reservas:").pack(pady=10)
+    tk.Label(R1, text=resumen_texto).pack()
+
+    if not cancelando_reserva:
+        if len(Reservas) > 0:
+            tk.Button(R1, text="Modificar Reserva", command=SeleccionarReservaModificar).pack(pady=5)
+            tk.Button(R1, text="Eliminar una Reserva", command=EliminarReserva).pack(pady=5)
+
+    tk.Button(R1, text="Confirmar Reserva", command=Confirmar).pack(pady=5)
+
+def SeleccionarReservaModificar():
+    R1.destroy()
+    seleccionar = tk.Toplevel()
+    seleccionar.title("Seleccionar Reserva a Modificar")
+
+    tk.Label(seleccionar, text="Seleccione el número de la reserva a modificar:").pack(pady=5)
+
+    opciones = [f"{i+1} - {r['Nombre']} - {r['Fecha']}" for i, r in enumerate(Reservas)]
+    seleccion = ttk.Combobox(seleccionar, values=opciones, state='readonly')
+    seleccion.pack(pady=5)
+
+    def modificar():
+        global reserva_actual
+        idx = seleccion.current()
+        if idx != -1:
+            reserva = Reservas[idx]
+            reserva_actual = idx
+
+            nombre.delete(0, tk.END)
+            nombre.insert(0, reserva['Nombre'])
+
+            identificacion.delete(0, tk.END)
+            identificacion.insert(0, reserva['ID'])
+
+            fecha.delete(0, tk.END)
+            fecha.insert(0, reserva['Fecha'])
+
+            zona.set(reserva['Zona'])
+            Mostrar_opcion_zona()
+
+            extra.delete(0, tk.END)
+            extra.insert(0, reserva['Detalle'])
+
+            seleccionar.destroy()
+            F1.deiconify()
+
+    tk.Button(seleccionar, text="Modificar", command=modificar).pack(pady=10)
+
+def EliminarReserva():
+    def procesar_eliminacion():
+        idx = seleccion.get()
+        if idx.isdigit() and 1 <= int(idx) <= len(Reservas):
+            Reservas.pop(int(idx)-1)
+            messagebox.showinfo("Éxito", "Reserva eliminada.")
+            eliminar_ventana.destroy()
+            R1.destroy()
+            MostrarResumenReservas()
+        else:
+            messagebox.showerror("Error", "Índice inválido")
+
+    eliminar_ventana = tk.Toplevel()
+    eliminar_ventana.title("Eliminar Reserva")
+
+    tk.Label(eliminar_ventana, text="Ingrese el número de la reserva a eliminar:").pack(pady=5)
+    seleccion = tk.Entry(eliminar_ventana)
+    seleccion.pack()
+    tk.Button(eliminar_ventana, text="Eliminar", command=procesar_eliminacion).pack(pady=5)
+
+def Confirmar():
+    R1.destroy()
+    Exito()
+
+def Exito():
+    global E1, correo_ofertas, aceptar_tyt
+    E1 = tk.Toplevel()
+    E1.title("Reserva Exitosa")
+
+    tk.Label(E1, text="¡Reserva realizada con éxito!", fg="green", font=("Arial", 12)).pack(pady=10)
+
+    tk.Button(E1, text="Hacer otra reserva", command=Otra_reserva).pack(pady=5)
+    tk.Button(E1, text="Calificar experiencia", command=Calificar).pack(pady=5)
+
+    tk.Label(E1, text="¿Desea recibir ofertas? Ingrese su correo:").pack(pady=10)
+    correo_ofertas = tk.Entry(E1, width=40)
+    correo_ofertas.pack()
+
+    aceptar_tyt = tk.IntVar()
+    tk.Checkbutton(E1, text="Acepto Términos y Condiciones", variable=aceptar_tyt).pack(pady=5)
+
+    tk.Button(E1, text="Finalizar y volver al inicio", command=Validar_ofertas).pack(pady=10)
+
+def Validar_ofertas():
+    correo = correo_ofertas.get()
+    if correo:
+        if "@" not in correo or "." not in correo:
+            messagebox.showerror("Error", "Correo no válido")
+            return
+        if not aceptar_tyt.get():
+            messagebox.showwarning("Aviso", "Debe aceptar los Términos y Condiciones")
+            return
+        messagebox.showinfo("Gracias", f"Gracias. Ofertas serán enviadas a {correo}")
+
+    E1.destroy()
+    if 'F1' in globals() and F1.winfo_exists():
+        F1.destroy()
+    V1.deiconify()
+
+def Otra_reserva():
+    E1.destroy()
+    if 'F1' in globals() and F1.winfo_exists():
+        F1.destroy()
+    Formulario()
+
+def Calificar():
+    E1.destroy()
+    cali = tk.Toplevel()
+    cali.title("Califica tu experiencia")
+
+    tk.Label(cali, text="¿Cómo calificarías tu experiencia?", font=("Arial", 11)).pack(pady=10)
+
+    def enviar_calificacion(valor):
+        messagebox.showinfo("Gracias", f"Gracias por tu calificación: {valor}/5")
+        cali.destroy()
+        Ofertas_post_calificacion()
+
+    for i in range(1, 6):
+        tk.Button(cali, text=str(i), width=5, command=lambda v=i: enviar_calificacion(v)).pack(pady=2)
+
+def Ofertas_post_calificacion():
+    global OC1, correo_ofertas, aceptar_tyt
+    OC1 = tk.Toplevel()
+    OC1.title("Ofertas Exclusivas")
+
+    tk.Label(OC1, text="¿Desea recibir ofertas? Ingrese su correo:").pack(pady=10)
+    correo_ofertas = tk.Entry(OC1, width=40)
+    correo_ofertas.pack()
+
+    aceptar_tyt = tk.IntVar()
+    tk.Checkbutton(OC1, text="Acepto Términos y Condiciones", variable=aceptar_tyt).pack(pady=5)
+
+    tk.Button(OC1, text="Finalizar y volver al inicio", command=Validar_ofertas_post).pack(pady=10)
+
+def Validar_ofertas_post():
+    correo = correo_ofertas.get()
+    if correo:
+        if "@" not in correo or "." not in correo:
+            messagebox.showerror("Error", "Correo no válido")
+            return
+        if not aceptar_tyt.get():
+            messagebox.showwarning("Aviso", "Debe aceptar los Términos y Condiciones")
+            return
+        messagebox.showinfo("Gracias", f"Gracias. Ofertas serán enviadas a {correo}")
+
+    OC1.destroy()
+    if 'F1' in globals() and F1.winfo_exists():
+        F1.destroy()
+    V1.deiconify()
+
+def CancelarReservaFormulario():
+    global cancelando_reserva
+    cancelando_reserva = True
+    V1.withdraw()
+    cancel = tk.Toplevel()
+    cancel.title("Cancelar Reserva")
+
+    tk.Label(cancel, text="Nombre del cliente:").pack()
+    nombre_cancel = tk.Entry(cancel)
+    nombre_cancel.pack()
+
+    tk.Label(cancel, text="Identificación:").pack()
+    id_cancel = tk.Entry(cancel)
+    id_cancel.pack()
+
+    tk.Label(cancel, text="Fecha de reserva (dd/mm/aa):").pack()
+    fecha_cancel = tk.Entry(cancel)
+    fecha_cancel.pack()
+
+    def procesar_cancelacion():
+        n = nombre_cancel.get().strip()
+        i = id_cancel.get().strip()
+        f = fecha_cancel.get().strip()
+        encontrada = False
+        for r in Reservas:
+            if r['Nombre'] == n and r['ID'] == i and r['Fecha'] == f:
+                Reservas.remove(r)
+                encontrada = True
+                break
+        if encontrada:
+            cancel.destroy()
+            MostrarResumenReservas()
+        else:
+            messagebox.showerror("Error", "No se encontró la reserva con esos datos")
+
+    tk.Button(cancel, text="Cancelar Reserva", command=procesar_cancelacion).pack(pady=10)
+    tk.Button(cancel, text="Volver al Inicio", command=lambda: [cancel.destroy(), volver_de_cancelacion()]).pack(pady=5)
+
+def volver_de_cancelacion():
+    global cancelando_reserva
+    cancelando_reserva = False
+    V1.deiconify()
+
+Inicio()
